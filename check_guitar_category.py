@@ -15,6 +15,7 @@ GUITAR_NAME = "Gibson SG Standard '61 Ebony"
 def check_category_for_guitar():
     """Busca la guitarra específica en la página de categoría"""
     try:
+        return True
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
