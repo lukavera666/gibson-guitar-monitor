@@ -8,9 +8,9 @@ from datetime import datetime
 import re
 
 # CONFIGURACIÓN - Página de categoría y modelo buscado
-CATEGORY_URL = "https://www.gibson.com/es-eu/collections/sg"
-SEARCH_KEYWORDS = ["standard", "61"]  # Palabras clave del modelo
-GUITAR_NAME = "Gibson SG Standard '61 Ebony"
+CATEGORY_URL = "https://www.gibson.com/es-eu/collections/gibson-sg-electric-guitars"
+SEARCH_KEYWORDS = ["standard", "61"]  # PRUEBA - buscar cualquier SG Standard 61
+GUITAR_NAME = "Gibson SG Standard '61"
 
 def check_category_for_guitar():
     """Busca la guitarra específica en la página de categoría"""
@@ -28,82 +28,69 @@ def check_category_for_guitar():
         response.raise_for_status()
         
         soup = BeautifulSoup(response.content, 'html.parser')
+        page_text = soup.get_text().lower()
         
-        # Buscar todos los productos en la página
-        products = soup.find_all(['a', 'div', 'article'], class_=lambda x: x and any(
-            keyword in str(x).lower() for keyword in ['product', 'item', 'card', 'guitar']
-        ))
+        print(f"📄 Página cargada correctamente")
+        print(f"📏 Tamaño del contenido: {len(page_text)} caracteres")
+        
+        # Buscar todos los enlaces de productos
+        all_links = soup.find_all('a', href=True)
+        print(f"🔗 Total de enlaces encontrados: {len(all_links)}")
         
         found_guitars = []
         
-        print(f"📦 Analizando {len(products)} elementos de productos...")
-        
-        for product in products:
-            # Extraer el texto del producto
-            product_text = product.get_text().lower()
-            product_html = str(product).lower()
+        for link in all_links:
+            link_text = link.get_text().lower()
+            link_href = link['href'].lower()
             
-            # Verificar si contiene todas las palabras clave
-            matches_all_keywords = all(keyword in product_text or keyword in product_html 
-                                      for keyword in SEARCH_KEYWORDS)
+            # Verificar si el enlace contiene las palabras clave
+            matches_keywords = all(keyword in link_text or keyword in link_href 
+                                  for keyword in SEARCH_KEYWORDS)
             
-            if matches_all_keywords:
-                # Intentar extraer el enlace del producto
-                link_tag = product if product.name == 'a' else product.find('a', href=True)
+            if matches_keywords and '/products/' in link_href:
+                # Construir URL completa
+                if link_href.startswith('/'):
+                    product_url = f"https://www.gibson.com{link['href']}"
+                elif link_href.startswith('http'):
+                    product_url = link['href']
+                else:
+                    continue
                 
-                if link_tag and link_tag.get('href'):
-                    product_url = link_tag['href']
-                    
-                    # Si es una URL relativa, hacerla absoluta
-                    if product_url.startswith('/'):
-                        product_url = f"https://www.gibson.com{product_url}"
-                    
-                    # Extraer el nombre del producto (título)
-                    title_tag = product.find(['h2', 'h3', 'h4', 'p'], class_=lambda x: x and 'title' in str(x).lower())
-                    if not title_tag:
-                        title_tag = product.find(['h2', 'h3', 'h4'])
-                    
-                    product_name = title_tag.get_text(strip=True) if title_tag else "SG Standard '61 Ebony"
-                    
-                    # Verificar disponibilidad (buscar botones de compra)
-                    has_buy_button = any(
-                        btn_text in product_html 
-                        for btn_text in ['añadir al carrito', 'add to cart', 'comprar', 'buy now']
-                    )
-                    
-                    is_out_of_stock = any(
-                        text in product_text 
-                        for text in ['agotado', 'out of stock', 'sold out', 'no disponible']
-                    )
-                    
-                    guitar_info = {
-                        'name': product_name,
-                        'url': product_url,
-                        'available': has_buy_button and not is_out_of_stock
-                    }
-                    
-                    found_guitars.append(guitar_info)
-                    print(f"\n✨ Guitarra encontrada:")
-                    print(f"   ├─ Nombre: {product_name}")
-                    print(f"   ├─ URL: {product_url}")
-                    print(f"   └─ Disponible: {guitar_info['available']}")
+                # Obtener nombre del producto
+                product_name = link.get_text(strip=True)
+                if not product_name:
+                    # Intentar extraer del href
+                    product_name = link['href'].split('/')[-1].replace('-', ' ').title()
+                
+                # Evitar duplicados
+                if any(g['url'] == product_url for g in found_guitars):
+                    continue
+                
+                guitar_info = {
+                    'name': product_name,
+                    'url': product_url,
+                    'available': True  # Asumimos disponible si aparece en la página
+                }
+                
+                found_guitars.append(guitar_info)
+                print(f"\n✨ Guitarra encontrada:")
+                print(f"   ├─ Nombre: {product_name}")
+                print(f"   ├─ URL: {product_url}")
+                print(f"   └─ Disponible: True")
         
         print(f"\n📊 Resumen:")
-        print(f"   ├─ Guitarras que coinciden: {len(found_guitars)}")
-        print(f"   └─ Disponibles: {sum(1 for g in found_guitars if g['available'])}")
+        print(f"   └─ Guitarras encontradas: {len(found_guitars)}")
         
-        # Retornar las guitarras disponibles
-        available_guitars = [g for g in found_guitars if g['available']]
-        return available_guitars if available_guitars else None
+        return found_guitars if found_guitars else []
         
     except requests.exceptions.RequestException as e:
         print(f"❌ Error de conexión: {e}")
-        return None
+        return []
     except Exception as e:
         print(f"❌ Error inesperado: {e}")
         import traceback
         traceback.print_exc()
-        return None
+        return []
 
 def send_email(guitars):
     """Envía un email con la lista de guitarras disponibles"""
@@ -125,7 +112,6 @@ def send_email(guitars):
         else:
             message['Subject'] = f"🎸 ¡{len(guitars)} Guitarras SG DISPONIBLES en Gibson!"
         
-        # Crear lista HTML de guitarras
         guitar_list_html = ""
         guitar_list_text = ""
         
@@ -142,7 +128,6 @@ def send_email(guitars):
             
             guitar_list_text += f"\n{i}. {guitar['name']}\n   🔗 {guitar['url']}\n"
         
-        # Crear versión HTML del email
         html_body = f"""
         <html>
           <body style="font-family: Arial, sans-serif; padding: 20px; background-color: #f5f5f5;">
@@ -163,7 +148,6 @@ def send_email(guitars):
         </html>
         """
         
-        # Versión texto plano
         text_body = f"""
         ¡BUENAS NOTICIAS! 🎸
         
@@ -183,7 +167,6 @@ def send_email(guitars):
         message.attach(part1)
         message.attach(part2)
         
-        # Conectar y enviar
         print("📧 Conectando al servidor de email...")
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
             server.login(sender_email, sender_password)
@@ -213,7 +196,7 @@ def main():
     
     print("\n" + "-"*70)
     
-    if available_guitars:
+    if available_guitars and len(available_guitars) > 0:
         print(f"\n🎉 ¡ENCONTRADA(S) {len(available_guitars)} GUITARRA(S) DISPONIBLE(S)!")
         print("📧 Enviando notificación por email...")
         
@@ -222,7 +205,7 @@ def main():
         else:
             print("⚠️ No se pudo enviar la notificación")
     else:
-        print("\n😔 No se encontró la guitarra en la categoría o no está disponible")
+        print("\n😔 No se encontró la guitarra en la categoría")
         print("🔄 Se volverá a comprobar en la próxima ejecución programada")
     
     print("\n" + "="*70 + "\n")
