@@ -9,7 +9,7 @@ import re
 
 # CONFIGURACIÓN - Página de categoría y modelo buscado
 CATEGORY_URL = "https://www.gibson.com/es-eu/collections/sg"
-SEARCH_KEYWORDS = ["standard", "61", "ebony"]  # Palabras clave del modelo
+SEARCH_KEYWORDS = ["standard", "61"]  # Palabras clave del modelo
 GUITAR_NAME = "Gibson SG Standard '61 Ebony"
 
 def check_category_for_guitar():
